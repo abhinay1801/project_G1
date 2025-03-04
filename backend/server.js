@@ -1,4 +1,3 @@
-// backend/server.js
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
@@ -16,11 +15,16 @@ connectDB();
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
-// Function to convert "DD.MM.YYYY" or "MM/DD/YYYY" to ISO Date
+// Function to normalize column names
+const normalizeColumnName = (name) => {
+    return name.replace(/\s+/g, "_").replace(/[.]/g, "").trim().toLowerCase();
+};
+
+// Function to convert date fields properly
 const convertExcelDate = (dateString) => {
-    if (!dateString || dateString.toString().trim() === "") return ""; // Keep empty if no date
+    if (!dateString || dateString.toString().trim() === "") return null;
     const parsedDate = moment(dateString, ["DD.MM.YYYY", "MM/DD/YYYY"], true);
-    return parsedDate.isValid() ? parsedDate.toISOString() : "";
+    return parsedDate.isValid() ? parsedDate.toDate() : null;
 };
 
 app.post("/upload", upload.single("file"), async (req, res) => {
@@ -38,69 +42,82 @@ app.post("/upload", upload.single("file"), async (req, res) => {
             return res.status(400).json({ message: "Invalid Excel file, no sheet found" });
         }
 
-        // Read Excel data with defval: "" to avoid missing fields
-        const sheetData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "" });
+        let sheetData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "" });
 
         if (sheetData.length === 0) {
             return res.status(400).json({ message: "Uploaded file is empty" });
         }
 
-        // ✅ Define expected schema fields
-        const schemaFields = [
-            "Contract", "CustItm_Sl", "Sales_Order", "Item_Slno", "Status", "Sales_Order_Date",
-            "Purchase_Order", "Purchase_Date", "Division", "Document_Type", "Sold_To_Party_Name",
-            "City_Of_Supply", "Delivery_Date", "Original_Delivery_Date", "LD_Effect", "Item_LD_Effect",
-            "Material_No", "Description", "Ordered_Qty", "Item_Price", "Ordered_Value", "Delivered",
-            "Pending_Qty", "Pending_Value", "Currency", "Industry_Group", "Inco", "Inco_Terms",
-            "Project_Description", "Material_Price_Type", "Scheduled_Delivery_Date", "Planned_Delivery_Date",
-            "Project_Short_Text", "Customer_short_TEXT"
-        ];
-
-        // 🛠 Normalize and clean data before inserting
-        const formattedData = sheetData.map(row => {
-            const cleanedRow = {};
-
-            schemaFields.forEach(field => {
-                // Find the exact column in Excel that matches the field
-                const excelKey = Object.keys(row).find(key => {
-                    // Normalize both the Excel column name and schema field
-                    const normalizedKey = key.replace(/\s+/g, "_").replace(/[^\w]/g, "").trim().toLowerCase();
-                    const normalizedField = field.replace(/\s+/g, "_").replace(/[^\w]/g, "").trim().toLowerCase();
-                    return normalizedKey === normalizedField;
-                });
-                
-
-                let value = excelKey ? row[excelKey] : "";
-
-                // Convert Date Fields properly
-                if (["Sales_Order_Date", "Purchase_Date", "Delivery_Date", "Original_Delivery_Date",
-                     "LD_Effect", "Item_LD_Effect", "Scheduled_Delivery_Date", "Planned_Delivery_Date"].includes(field)) {
-                    cleanedRow[field] = convertExcelDate(value);
-                } else if (typeof value === "number") {
-                    cleanedRow[field] = value;
-                } else {
-                    cleanedRow[field] = value !== "" ? value.toString().trim() : ""; // Store empty string if missing
-                }
+        // Normalize column names and map data properly
+        sheetData = sheetData.map(row => {
+            let formattedRow = {};
+            Object.keys(row).forEach(key => {
+                const normalizedKey = normalizeColumnName(key);
+                formattedRow[normalizedKey] = row[key] === undefined ? "" : row[key];
             });
+            // Dynamically find and parse Contract field correctly
+            const contractKey = Object.keys(formattedRow).find(key => key.includes("contract"));
 
-            return cleanedRow;
+            let contractValue = null;
+            if (contractKey && formattedRow[contractKey] !== "") {
+                let rawValue = formattedRow[contractKey].toString().replace(/,/g, "").trim();
+                contractValue = !isNaN(rawValue) ? Number(rawValue) : null;
+            }
+
+            // Debugging log to check contract value extraction
+            console.log(`Extracted Contract Value: ${contractValue}`);
+
+            return {
+                Contract: contractValue,
+                CustItm_Sl: formattedRow["custitm_sl"] ? Number(formattedRow["custitm_sl"]) : null,
+                Sales_Order: formattedRow["sales_orde"] ? Number(formattedRow["sales_orde"]) : null,
+                Item_Slno: formattedRow["item_slno"] ? Number(formattedRow["item_slno"]) : null,
+                Status: formattedRow["status"] || "",
+                Sales_Order_Date: convertExcelDate(formattedRow["sales_orde_1"]),
+                Purchase_Order: formattedRow["purchase_o"] || "",
+                Purchase_Date: convertExcelDate(formattedRow["purchase_o_1"]),
+                Division: formattedRow["division"] ? Number(formattedRow["division"]) : null,
+                Document_Type: formattedRow["document_t"] || "",
+                Sold_To_Party_Name: formattedRow["sold_to_party_name"] || "",
+                City_Of_Supply: formattedRow["city_of_su"] || "",
+                Delivery_Date: convertExcelDate(formattedRow["delvy_date"]),
+                Original_Delivery_Date: convertExcelDate(formattedRow["orig_delv"]),
+                LD_Effect: convertExcelDate(formattedRow["ld_effect"]),
+                Item_LD_Effect: convertExcelDate(formattedRow["item_ld_ef"]),
+                Material_No: formattedRow["material_no"] || "",
+                Description: formattedRow["description"] || "",
+                Ordered_Qty: formattedRow["ordered_qt"] ? Number(formattedRow["ordered_qt"]) : null,
+                Item_Price: formattedRow["item_price"] ? Number(formattedRow["item_price"]) : null,
+                Ordered_Value: formattedRow["ordered_va"] ? Number(formattedRow["ordered_va"]) : null,
+                Delivered: formattedRow["delivered"] ? Number(formattedRow["delivered"]) : 0,
+                Pending_Qty: formattedRow["pending_qt"] ? Number(formattedRow["pending_qt"]) : null,
+                Pending_Value: formattedRow["pend_value"] ? Number(formattedRow["pend_value"]) : null,
+                Currency: formattedRow["curr"] || "",
+                Industry_Group: formattedRow["industry_g"] || "",
+                Inco: formattedRow["inco"] || "",
+                Inco_Terms: formattedRow["inco_terms"] || "",
+                Project_Description: formattedRow["project_description"] || "",
+                Material_Price_Type: formattedRow["material_price_type"] || "",
+                Scheduled_Delivery_Date: convertExcelDate(formattedRow["scheduled_delivery_date"]),
+                Planned_Delivery_Date: convertExcelDate(formattedRow["planned_delivery_date"]),
+                Project_Short_Text: formattedRow["project_short_text"] || "",
+                Customer_short_TEXT: formattedRow["customer_short_text"] || ""
+            };
         });
 
-        console.log("📊 Formatted Data:", formattedData);
+        console.log("📊 Data to be stored:", sheetData);
 
-        // ✅ Store data in MongoDB ensuring all fields are included
-        await DataModel.insertMany(formattedData, { ordered: false })
+        await DataModel.insertMany(sheetData, { ordered: false })
             .then(() => console.log("✅ Data successfully stored in MongoDB"))
             .catch(error => console.error("❌ MongoDB Insert Error:", error));
 
-        res.json({ message: "File uploaded successfully", data: formattedData });
+        res.json({ message: "File uploaded successfully", data: sheetData });
     } catch (error) {
         console.error("❌ Upload Error:", error);
         res.status(500).json({ message: "Error uploading file", error: error.message });
     }
 });
 
-// 📌 Fetch all stored data
 app.get("/data", async (req, res) => {
     try {
         const data = await DataModel.find();
@@ -111,4 +128,5 @@ app.get("/data", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));  
+
