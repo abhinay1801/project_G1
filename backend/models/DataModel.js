@@ -6,17 +6,17 @@ const dataSchema = new mongoose.Schema({
     Sales_Order: Number,
     Item_Slno: Number,
     Status: String,
-    Sales_Order_Date: Date,
+    Sales_Order_Date: String,
     Purchase_Order: String,
-    Purchase_Date: Date,
+    Purchase_Date: String,
     Division: Number,
     Document_Type: String,
     Sold_To_Party_Name: String,
     City_Of_Supply: String,
-    Delivery_Date: Date,
-    Original_Delivery_Date: Date,
-    LD_Effect: Date,
-    Item_LD_Effect: Date,
+    Delivery_Date: String,
+    Original_Delivery_Date: String,
+    LD_Effect: String,
+    Item_LD_Effect: String,
     Material_No: String,
     Description: String,
     Ordered_Qty: Number,
@@ -31,10 +31,10 @@ const dataSchema = new mongoose.Schema({
     Inco_Terms: String,
     Project_Description: String,
     Material_Price_Type: String,
-    Scheduled_Delivery_Date: Date,
-    Planned_Delivery_Date: Date,
+    Scheduled_Delivery_Date: String,
+    Planned_Delivery_Date: String,
     Project_Short_Text: String,
-    Customer_short_TEXT: String
+    Customer_Short_Text: String
 });
 
 const DataModel = mongoose.model("Data", dataSchema);

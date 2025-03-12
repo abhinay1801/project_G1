@@ -22,9 +22,15 @@ const normalizeColumnName = (name) => {
 
 // Function to convert date fields properly
 const convertExcelDate = (dateString) => {
-    if (!dateString || dateString.toString().trim() === "") return null;
-    const parsedDate = moment(dateString, ["DD.MM.YYYY", "MM/DD/YYYY"], true);
-    return parsedDate.isValid() ? parsedDate.toDate() : null;
+    if (!dateString || dateString.toString().trim() === "") return "";
+    return moment(dateString, ["DD.MM.YYYY", "MM/DD/YYYY"], true).format("DD/MM/YYYY"); 
+};
+
+
+// Function to convert values to numbers or default to 0
+const toNumberOrZero = (value) => {
+    let num = Number(value);
+    return isNaN(num) ? 0 : num;
 };
 
 app.post("/upload", upload.single("file"), async (req, res) => {
@@ -55,28 +61,35 @@ app.post("/upload", upload.single("file"), async (req, res) => {
                 const normalizedKey = normalizeColumnName(key);
                 formattedRow[normalizedKey] = row[key] === undefined ? "" : row[key];
             });
+
             // Dynamically find and parse Contract field correctly
             const contractKey = Object.keys(formattedRow).find(key => key.includes("contract"));
 
-            let contractValue = null;
+            let contractValue = 0;
             if (contractKey && formattedRow[contractKey] !== "") {
                 let rawValue = formattedRow[contractKey].toString().replace(/,/g, "").trim();
-                contractValue = !isNaN(rawValue) ? Number(rawValue) : null;
+                contractValue = !isNaN(rawValue) ? Number(rawValue) : 0;
             }
 
             // Debugging log to check contract value extraction
             console.log(`Extracted Contract Value: ${contractValue}`);
 
             return {
-                Contract: contractValue,
-                CustItm_Sl: formattedRow["custitm_sl"] ? Number(formattedRow["custitm_sl"]) : null,
-                Sales_Order: formattedRow["sales_orde"] ? Number(formattedRow["sales_orde"]) : null,
-                Item_Slno: formattedRow["item_slno"] ? Number(formattedRow["item_slno"]) : null,
+                Contract: toNumberOrZero(contractValue),
+                CustItm_Sl: toNumberOrZero(formattedRow["custitm_sl"]),
+                Sales_Order: toNumberOrZero(formattedRow["sales_orde"]),
+                Item_Slno: toNumberOrZero(formattedRow["item_slno"]),
+                Division: toNumberOrZero(formattedRow["division"]),
+                Ordered_Qty: toNumberOrZero(formattedRow["ordered_qt"]),
+                Item_Price: toNumberOrZero(formattedRow["item_price"]),
+                Ordered_Value: toNumberOrZero(formattedRow["ordered_va"]),
+                Delivered: toNumberOrZero(formattedRow["delivered"]),
+                Pending_Qty: toNumberOrZero(formattedRow["pending_qt"]),
+                Pending_Value: toNumberOrZero(formattedRow["pend_value"]),
                 Status: formattedRow["status"] || "",
                 Sales_Order_Date: convertExcelDate(formattedRow["sales_orde_1"]),
                 Purchase_Order: formattedRow["purchase_o"] || "",
                 Purchase_Date: convertExcelDate(formattedRow["purchase_o_1"]),
-                Division: formattedRow["division"] ? Number(formattedRow["division"]) : null,
                 Document_Type: formattedRow["document_t"] || "",
                 Sold_To_Party_Name: formattedRow["sold_to_party_name"] || "",
                 City_Of_Supply: formattedRow["city_of_su"] || "",
@@ -86,12 +99,6 @@ app.post("/upload", upload.single("file"), async (req, res) => {
                 Item_LD_Effect: convertExcelDate(formattedRow["item_ld_ef"]),
                 Material_No: formattedRow["material_no"] || "",
                 Description: formattedRow["description"] || "",
-                Ordered_Qty: formattedRow["ordered_qt"] ? Number(formattedRow["ordered_qt"]) : null,
-                Item_Price: formattedRow["item_price"] ? Number(formattedRow["item_price"]) : null,
-                Ordered_Value: formattedRow["ordered_va"] ? Number(formattedRow["ordered_va"]) : null,
-                Delivered: formattedRow["delivered"] ? Number(formattedRow["delivered"]) : 0,
-                Pending_Qty: formattedRow["pending_qt"] ? Number(formattedRow["pending_qt"]) : null,
-                Pending_Value: formattedRow["pend_value"] ? Number(formattedRow["pend_value"]) : null,
                 Currency: formattedRow["curr"] || "",
                 Industry_Group: formattedRow["industry_g"] || "",
                 Inco: formattedRow["inco"] || "",
@@ -101,7 +108,7 @@ app.post("/upload", upload.single("file"), async (req, res) => {
                 Scheduled_Delivery_Date: convertExcelDate(formattedRow["scheduled_delivery_date"]),
                 Planned_Delivery_Date: convertExcelDate(formattedRow["planned_delivery_date"]),
                 Project_Short_Text: formattedRow["project_short_text"] || "",
-                Customer_short_TEXT: formattedRow["customer_short_text"] || ""
+                Customer_Short_Text: formattedRow["customer_short_text"] || "",
             };
         });
 
@@ -129,4 +136,3 @@ app.get("/data", async (req, res) => {
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));  
-
